@@ -1,0 +1,21 @@
+{
+  "url": "",
+  "proxy_location": null,
+  "async": false,
+  "max_cache_age": 0,
+  "settings": {
+    "record_request": false,
+    "actions": [
+      {
+        "type": "wait",
+        "selector": ".mw-content-container",
+        "timeout": 10000,
+        "continue_on_fail": true
+      },
+      {
+        "type": "generate_markdown",
+        "output_type": "inline"
+      }
+    ]
+  }
+}
