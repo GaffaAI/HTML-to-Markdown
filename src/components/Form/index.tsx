@@ -9,6 +9,7 @@ import {
   Code,
   LoaderCircle,
   ArrowLeftRight,
+  toast,
 } from "@gaffaai/uikit";
 
 import { ResultsBlock } from "../ResultsBlock";
@@ -20,6 +21,7 @@ import RequestJson from "./request.json";
 import type { MarkdownRequest } from "../../types";
 import { useFetchMarkdown } from "../../hooks/useFetchMarkdown";
 import { useFetchUserCount } from "../../hooks/useFetchUserCount";
+import { Turnstile } from "../Turnstile";
 
 export interface FormProps {}
 
@@ -29,10 +31,11 @@ const PROXY_LOCATIONS = [
   { label: "Singapore", value: "sg" },
   { label: "France", value: "fr" },
 ];
-
+const { toast: toastInstance } = toast;
 export const Form: FC<FormProps> = () => {
   const [url, setUrl] = useState("");
   const [userRequestCount, setUserRequestCount] = useState(0);
+  const [isFormSubmitted, setIsFormSubmitted] = useState(false);
   const [location, setLocation] = useState(PROXY_LOCATIONS[0]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [error, setError] = useState("");
@@ -76,7 +79,42 @@ export const Form: FC<FormProps> = () => {
       return setError("Please enter a valid URL");
     }
     setError("");
-    fetchMarkdown(requestPayload);
+    setIsFormSubmitted(true);
+  };
+
+  useEffect(() => {
+    if (fetchError || countError) {
+      const message = fetchError || countError || "Something went wrong";
+      toastInstance.error(message);
+    }
+  }, [fetchError, countError]);
+
+  const onCloudflareSuccess = async (token: string) => {
+    try {
+      const response = await fetch("/api/token-validate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ turnstileToken: token }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        fetchMarkdown(requestPayload);
+      } else {
+        toastInstance.error("Turnstile validation failed. Please try again.");
+      }
+      setIsFormSubmitted(false);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        toastInstance.error(
+          error.message || "Turnstile validation failed. Please try again.",
+        );
+      } else {
+        toastInstance.error("Turnstile validation failed. Please try again.");
+      }
+      setIsFormSubmitted(false);
+    }
   };
 
   const getInfoMessageVariant = () => {
@@ -144,7 +182,7 @@ export const Form: FC<FormProps> = () => {
               </div>
             </div>
           </div>
-          <div className="flex flex-col gap-4 mt-6 md:grid md:grid-cols-[193px_193px] md:ml-auto">
+          <div className="flex flex-col gap-4 mt-6 md:grid md:grid-cols-[193px_1fr] md:ml-auto">
             <Button
               className="w-full max-h-10"
               variant="secondaryOutline"
@@ -154,26 +192,31 @@ export const Form: FC<FormProps> = () => {
             >
               View code
             </Button>
-            <Button
-              size="l"
-              className="w-full max-h-10"
-              variant="secondary"
-              isDisabled={
-                status === "loading" ||
-                countStatus === "loading" ||
-                userRequestCount <= 0
-              }
-              endIcon={
-                status === "loading" ? (
-                  <LoaderCircle className="animate-spin" strokeWidth={1} />
-                ) : (
-                  <ArrowLeftRight strokeWidth={1.5} />
-                )
-              }
-              onClick={handleSubmit}
-            >
-              {status === "loading" ? "Converting..." : "Convert"}
-            </Button>
+
+            {isFormSubmitted ? (
+              <Turnstile onSuccess={onCloudflareSuccess} />
+            ) : (
+              <Button
+                size="l"
+                className="w-full max-h-10 md:max-w-193px"
+                variant="secondary"
+                isDisabled={
+                  status === "loading" ||
+                  countStatus === "loading" ||
+                  userRequestCount <= 0
+                }
+                endIcon={
+                  status === "loading" ? (
+                    <LoaderCircle className="animate-spin" strokeWidth={1} />
+                  ) : (
+                    <ArrowLeftRight strokeWidth={1.5} />
+                  )
+                }
+                onClick={handleSubmit}
+              >
+                {status === "loading" ? "Converting..." : "Convert"}
+              </Button>
+            )}
           </div>
         </div>
         {markdownData && <ResultsBlock markdownData={markdownData} />}
